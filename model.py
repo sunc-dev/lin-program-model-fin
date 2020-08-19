@@ -6,14 +6,13 @@ Created on Tue Aug 18 07:59:21 2020
 """
 
 
-path = r'C:\Users\csunj\Downloads\Modelling'
 
 try:
     import pulp as pl
     import sys
     import pandas as pd
     
-    sys.path.append(path)
+    sys.path.append('.')
     from transform import Data as nm
     
 except Exception as e:

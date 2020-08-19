@@ -8,19 +8,16 @@ Created on Fri Aug 14 12:30:58 2020
 
 try:
  
-    import sys, os
+    import os
     import pandas as pd
-        
-    sys.path.append('.')
-    
       
 except Exception as e:
     print("Some Modules are Missing {}".format(e))
 
 
 class Path():            
-    def __init__(self):
-       self.root = r'C:\Users\csunj\Downloads\Modelling'
+    def __init__(self, root=None, folder=None):
+       self.root = os.path.dirname(os.path.abspath(__file__))
        self.folder = os.path.join(self.root,'data')
 
     def pathItems(self):
