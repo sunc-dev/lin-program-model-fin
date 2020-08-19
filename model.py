@@ -9,105 +9,130 @@ Created on Tue Aug 18 07:59:21 2020
 path = r'C:\Users\csunj\Downloads\Modelling'
 
 try:
-    
     import pulp as pl
-    import sys, os
+    import sys
     import pandas as pd
-        
-    
     
     sys.path.append(path)
     from transform import Data as nm
-
-      
+    
 except Exception as e:
     print("Some Modules are Missing {}".format(e))
 
+class Contraints():
+   def __init__(self, budget=None, proximity=None, endangerment=None, trees=None, water=None, area=None):
+        
+        self.budget = 7500
+        self.proximity = 20
+        self.endangerment = 15
+        self.trees = 10
+        self.water = 22
+        self.area = 15
 
 
-def load_data():
-    tr = nm()
-    data = tr.getData('input.csv')
-    inputs = tr.normalize(data)
-    return inputs
-
-
-inputs = load_data()
-
-
-model = pl.LpProblem('porfolio-opt', pl.LpMaximize)
-
-
-#create Decision Variables
-decisions = []
-for index, row in inputs.iterrows():
-    var = str('x' + str(index))
-    var = pl.LpVariable(str(var), lowBound = 0, upBound = 1, cat='Integer')
-    decisions.append(var)
+class Model(object):
+    def __init__(self, name=None):    
+        self.modelName = name
     
-print ("Total number of decisions: " + str(len(decisions)))
+    def load(self):
+        tr = nm()
+        data = tr.getData('input.csv')
+        inputs = tr.normalize(data)
+        return inputs
 
+    def init_model(self,inputs):
+        
+        self.modelName = 'porfolio-opt'
+        
+        decisions = []
+        objective = []
+        eq = []
+        
+        try:    
+            model = pl.LpProblem(self.modelName, pl.LpMaximize)
 
-#define objective function object
-objective_value = ""
-for index, row in inputs.iterrows():
-    for i, decision in enumerate(decisions):
-        if index== i:
-            expression = (row.Area + row.Trees + row.Water + row.Endangered + row.ReserveProximity)*decision
-            objective_value += expression
+            decisions = [pl.LpVariable(str('x'+str(index)),
+                                       lowBound=0,
+                                       upBound=1, 
+                                       cat='Binary') for index in inputs.index]
+            print('Decision vector: ')
+            for decision in decisions:
+                print(decision)
 
-#add objective function to model
-model += objective_value
-print("Objective Function: "+ str(objective_value))
+            eq = pl.lpSum([(inputs.Area[i]+
+                          inputs.Trees[i]+
+                          inputs.Water[i]+
+                          inputs.Endangered[i]+
+                          inputs.NaturalReserve[i])*decisions[j]
+                           for i in inputs.index for j,decision in enumerate(decisions) if i==j])
+                        
+            objective += eq
+            model += objective
+            print("Objective Function: "+ str(objective))
 
-
-#define constraints object
-budget_constraint = 7500
-proximity_constraint = 20.00
-endangered_constraint = 15.00
-trees_constraint = 10.00
-water_economy_constraint = 22.00
-area_constraint = 15.00
-
-total_budget = ''
-proximity = ''
-endangered_levels = ''
-trees_level = ''
-water_economy = ''
-area = ''
-
-
-for index, row in inputs.iterrows():
-    for i, decision in enumerate(decisions):
-        if index==i:
+        except:
+            print("Model initalize failed")
+        return model, decisions
+    
+    def constraints(self,model,inputs,decisions):
+        
+        props = Contraints()
+        budget = ''
+        proximity = ''
+        endangerment = ''
+        trees = ''
+        water = ''
+        area = ''
+        
+        try:
+            for index, row in inputs.iterrows():
+                for i, decision in enumerate(decisions):
+                    if index==i:
+                        
+                        budget += row.Price*decision
+                        proximity += row.NaturalReserve*decision
+                        endangerment += row.Endangered*decision
+                        trees += row.Trees*decision
+                        water += row.Water*decision
+                        area += row.Area*decision
+                        
+    
+            #Constraint inequalities
+            model += (budget <= props.budget, 'budget_constraint')
+            model += (proximity <= props.proximity, 'proximity_constraint')
+            model += (endangerment >= props.endangerment, 'endangered_constraint')
+            model += (trees >= props.trees, 'trees_constraint')
+            model += (water >= props.water, 'water_constraint')
+            model += (area >= props.area, 'area_constraint')
+        
+        except:
+            print('Constraint setup failed')
             
-            budget_eq = row.Price*decision
-            proximity_eq = row.ReserveProximity*decision
-            endangered_eq = row.Endangered*decision
-            trees_eq = row.Trees*decision
-            water_eq = row.Water*decision
-            area_eq = row.Area*decision
-            
-            total_budget += budget_eq
-            proximity += proximity_eq
-            endangered_levels += endangered_eq
-            trees_level += trees_eq
-            water_economy += water_eq
-            area += area_eq
-            
-            
-#add contraints to model
-model += (total_budget <= budget_constraint, 'budget_constraint')
-model += (proximity <= proximity_constraint, 'proximity_constraint')
-model += (endangered_levels <= endangered_constraint, 'endangered_constraint')
-model += (trees_level <= trees_constraint, 'trees_constraint')
-model += (water_economy <= water_economy_constraint, 'water_constraint')
-model += (area <= area_constraint, 'area_constraint')
+        print("Optimization function: "+ str(model))
+        return model
 
-print("Optimization function: "+ str(model))
+    def solve(self, model, inputs):
+        solver = pl.PULP_CBC_CMD(msg=True, warmStart=True)
+        result = model.solve(solver)  
+        
+        print("Model status: " + pl.constants.LpStatus[result])
+        print("Optimal solution output: ", pl.value(model.objective))
+        for variable in model.variables():
+            print('Decision: '+variable.name, "=", variable.varValue)
+    
+        decisions = [(int(i.name.strip('x')), i.varValue) for i in model.variables()]
+        decisions = pd.DataFrame(list(decisions), columns=['id','Decision'])
+        
+        inputs = inputs.merge(decisions[['id',
+                                        'Decision']], 
+                              how='left',
+                              left_on= inputs.index,
+                              right_on=['id']
+                              )
 
 
-#run optimization
-result = model.solve()
- 
-assert result == pl.constants.LpStatusOptimal
+        inputs = inputs.drop(['id'],axis=1)
+        return inputs
+
+
+

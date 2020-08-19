@@ -67,13 +67,7 @@ class Data():
         inputs['Trees'] = inputs['Trees']*1/200
         inputs['Water'] = inputs.apply(lambda row: norm_water (row),axis=1)
         inputs['Endangered'] = inputs.apply(lambda row: norm_endangered (row),axis=1)
-        inputs['ReserveProximity'] = inputs.apply(lambda row: norm_reserve (row),axis=1)
-         
+        inputs['NaturalReserve'] = inputs.apply(lambda row: norm_reserve (row),axis=1)
         return inputs
-    
 
-if __name__ == '__main__':
     
-    tr = Data()
-    data = tr.getData('input.csv')
-    inputs = tr.normalize(data)
